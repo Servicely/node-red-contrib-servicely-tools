@@ -1,3 +1,11 @@
+# Ignore Idea folder
+.idea/
+
+# Ignore the docker folder
+_docker_config_volume/
+
+node_modules/
+
 # Logs
 logs
 *.log

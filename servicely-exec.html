@@ -1,0 +1,249 @@
+<script type="text/javascript">
+    RED.nodes.registerType('servicely-exec', {
+        category: 'servicely',
+        color: 'darksalmon',
+        defaults: {
+            name: {value: ""},
+            command: {value: ""},
+            commandArgs: {value: ""},
+            cwd: {value: ""},
+            envProperty: {value: ""},
+            shell: {value: false},
+            payloadIs: {value: "argument"}, 
+            minError: {value: 1, validate: RED.validators.number()},
+            minWarning: {value: "", validate: RED.validators.number()},
+            // New properties
+            argumentsSourceProperty: {value: "payload"},
+            preProcessScript: {value: ""},
+            postProcessScript: {value: ""},
+            sendStartControl: {value: false},
+            resultSource: {value: "payload"}
+        },
+        inputs: 1,
+        outputs: 3, // 1: stdout, 2: stderr, 3: control/rc
+        icon: "servicely-image-nodered.png",
+        label: function () {
+            return this.name || "exec";
+        },
+        paletteLabel: 'Exec',
+        oneditprepare: function () {
+            // Initialize ACE editor for pre-processing script
+            this.preProcessEditor = RED.editor.createEditor({
+                id: 'node-input-preProcessScript-editor',
+                mode: 'ace/mode/javascript',
+                value: this.preProcessScript
+            });
+
+            // Initialize ACE editor for post-processing script
+            this.postProcessEditor = RED.editor.createEditor({
+                id: 'node-input-postProcessScript-editor',
+                mode: 'ace/mode/javascript',
+                value: this.postProcessScript
+            });
+
+            // TODO: Implement logic for selecting payloadIs, format, etc. if needed
+        },
+        oneditsave: function () {
+            // Retrieve script content from ACE editors
+            var preScript = this.preProcessEditor.getValue();
+            var postScript = this.postProcessEditor.getValue();
+            
+            // Update the hidden input fields, which Node-RED uses for saving
+            $("#node-input-preProcessScript").val(preScript);
+            $("#node-input-postProcessScript").val(postScript);
+
+            // Assign to defaults properties (might be redundant but good practice)
+            this.preProcessScript = preScript;
+            this.postProcessScript = postScript;
+
+            // Clean up editors
+            this.preProcessEditor.destroy();
+            delete this.preProcessEditor;
+            this.postProcessEditor.destroy();
+            delete this.postProcessEditor;
+        }
+        // TODO: Refine help text further if needed
+    });
+</script>
+
+<script type="text/html" data-template-name="servicely-exec">
+    <div class="form-row">
+        <label for="node-input-name" style="width:140px;"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+
+    <!-- Core bigexec settings - Adapt as needed -->
+    <div class="form-row">
+        <label for="node-input-command" style="width:140px;"><i class="fa fa-terminal"></i> Command</label>
+        <input type="text" id="node-input-command" placeholder="e.g. /usr/bin/python">
+    </div>
+    <div class="form-row">
+        <label for="node-input-cwd" style="width:140px;"><i class="fa fa-folder-open"></i> Cwd</label>
+        <input type="text" id="node-input-cwd" placeholder="Working directory">
+    </div>
+    <div class="form-row">
+        <label for="node-input-payloadIs" style="width:140px;"><i class="fa fa-sign-in"></i> Payload is</label>
+        <select id="node-input-payloadIs">
+            <option value="argument">added as argument</option>
+            <option value="pipe">piped to stdin</option>
+        </select>
+        <div style="font-size: 0.8em; margin-left: 145px;">Send msg.payload to command's input stream, or add to the command arguments.</div>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-argumentsSourceProperty" style="width:140px;"><i class="fa fa-tasks"></i> Arguments Source</label>
+        <input type="text" id="node-input-argumentsSourceProperty" placeholder="msg. property (default: payload)">
+        <div style="font-size: 0.8em; margin-left: 145px;">Property on msg for command arguments.</div>
+    </div>
+    <div class="form-row">
+        <label for="node-input-resultSource" style="width:140px;"><i class="fa fa-sign-out"></i> Result Property</label>
+        <input type="text" id="node-input-resultSource" placeholder="payload">
+        <span style="font-size: 0.8em; margin-left: 145px;">Property to store result (stdout, stderr, control) on msg.</span>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-envProperty" style="width:140px;"><i class="fa fa-cog"></i> Env Vars from</label>
+        <input type="text" id="node-input-envProperty" placeholder="msg. property (optional)">
+        <span style="font-size: 0.8em; margin-left: 145px;">Property on msg holding env variables object.</span>
+    </div>
+
+    <hr/>
+
+    <div class="form-row" style="margin-bottom: 0px;">
+        <label for="node-input-preProcessScript" style="width:140px;"><i class="fa fa-code"></i> Pre-process Script</label>
+        <input type="hidden" id="node-input-preProcessScript">
+    </div>
+    <div class="form-row node-text-editor-row">
+        <div style="height: 150px; min-height:100px;" class="node-text-editor"
+             id="node-input-preProcessScript-editor"></div>
+    </div>
+    <div class="form-tips" style="width: 100%; max-width: 95%;">
+        <div>Run before command execution. Use <code>msg</code> object. Modify <code>msg</code> as required.</div>
+    </div>
+
+    <div class="form-row" style="margin-bottom: 0px;">
+        <label for="node-input-postProcessScript" style="width:240px;"><i class="fa fa-code"></i> Post-process Script</label>
+        <input type="hidden" id="node-input-postProcessScript">
+    </div>
+    <div class="form-row node-text-editor-row">
+        <div style="height: 150px; min-height:100px;" class="node-text-editor"
+             id="node-input-postProcessScript-editor"></div>
+    </div>
+    <div class="form-tips" style="width: 100%; max-width: 95%;">
+        <div>Run after command execution. Use <code>msg</code> (result), <code>originalMsg</code>, <code>config</code>. Return modified 
+            <code>msg</code>.</div>
+
+    </div>
+
+    <hr/>
+
+    <!-- Other settings like format, error codes, shell, env -->
+    <div class="form-row">
+        <label for="node-input-shell" style="width:140px;"><i class="fa fa-shield"></i> Use Shell</label>
+        <input type="checkbox" id="node-input-shell" style="width:auto; vertical-align:top;">
+        <label for="node-input-shell" style="width:auto">Run command in a shell</label>
+    </div>
+    <div class="form-row">
+        <label for="node-input-sendStartControl" style="width:140px;"><i class="fa fa-bell-o"></i> Control</label>
+        <input type="checkbox" id="node-input-sendStartControl" style="width:auto; vertical-align:top;">
+        <label for="node-input-sendStartControl" style="width:auto">Send 'start' control message</label>
+    </div>
+    <div class="form-row">
+        <label for="node-input-minError" style="width:140px;"><i class="fa fa-warning"></i> Error RC >=</label>
+        <input type="text" id="node-input-minError" style="width: 50px;">
+        <label for="node-input-minWarning" style="margin-left: 20px; width: auto;"><i
+                class="fa fa-exclamation-triangle"></i> Warn RC >=</label>
+        <input type="text" id="node-input-minWarning" style="width: 50px;" placeholder="optional">
+    </div>
+
+    <!-- <div class="form-row">
+        <label for="node-input-commandArgs"><i class="fa fa-list-ul"></i> Arguments</label>
+        <input type="text" id="node-input-commandArgs" placeholder="e.g. -h">
+    </div> -->
+    
+
+</script>
+
+<script type="text/html" data-help-name="servicely-exec">
+    <p>Executes an external command. Allows flexible command specification, pre-processing of input messages, asyncronous execution 
+        and updates, and post-processing of results via custom scripts.</p>
+
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">string | buffer | array | any</span></dt>
+        <dd> Default source for command arguments (see Arguments Source property). If Payload is set to 'piped to stdin', this value is also sent to the command's standard input.</dd>
+        <dt class="optional">configured arguments source property <span class="property-type">string | array | any</span></dt>
+        <dd> If `Arguments Source` is set to a property other than `payload`, the value of that property will be used to determine the command arguments instead. See Details section for handling of different types.</dd>
+        <dt class="optional">configured env var property <span class="property-type">object</span></dt>
+        <dd> If configured via `Env Vars from`, this `msg` property should contain an object of key/value pairs to be
+            added to the command's environment.
+        </dd>
+    </dl>
+
+    <h3>Outputs</h3>
+    <ol class="node-ports">
+        <li>Standard output
+            <dl class="message-properties">
+                <dt class="optional">configured result source property <span class="property-type">string | buffer</span></dt>
+                <dd>The standard output (`stdout`) chunk (UTF-8 string). Placed on the configured Result Property (default `payload`). This output receives messages incrementally.</dd>
+            </dl>
+        </li>
+        <li>Standard error
+            <dl class="message-properties">
+                <dt class="optional">configured result source property <span class="property-type">string</span></dt>
+                <dd>The complete standard error (`stderr`) output (UTF-8 string). Placed on the configured Result Property (default `payload`). Sent after the command finishes.</dd>
+            </dl>
+        </li>
+        <li>Control / Return Code
+            <dl class="message-properties">
+                <dt class="optional">configured result source property <span class="property-type">object</span></dt>
+                <dd>Control messages. If enabled, an initial start state object is sent. Upon completion, a final state object containing rc, pid, complete stdout/stderr, etc. is sent. Placed on the configured Result Property (default `payload`).</dd>
+            </dl>
+        </li>
+    </ol>
+
+    <h3>Details</h3>
+    <p>This node spawns an external command using `child_process.spawn`.</p>
+    <h4>Arguments</h4>
+    <p>The arguments passed to the command are determined by the <b>Arguments Source</b> property (which defaults to <code>msg.payload</code>).</p>
+    <ul>
+        <li>If the value found at the source property is a <b>string</b>, it is split by spaces to form the arguments array.</li>
+        <li>If the value is an <b>array</b>, its elements are used directly as the arguments (each element is converted to a string).</li>
+        <li>If the value is <code>null</code> or <code>undefined</code>, the static <b>Arguments</b> field from the node configuration is used (split by spaces).</li>
+        <li>If the value is any other type (number, boolean, object), it is converted to its string representation and used as a single argument.</li>
+    </ul>
+    <p>The <b>Payload is</b> setting now only controls whether <code>msg.payload</code> is piped to the command's standard input.</p>
+    <h4>Pre-process Script</h4>
+    <p>Executes before the command. Allows modification of the `msg` object (which might affect argument/env/cwd resolution). Access `msg` and `config`. Return the
+        modified `msg`. Return `null` to prevent execution for this message.</p>
+    <pre><code>// Example: Add a timestamp argument
+msg.payload = msg.payload + " --ts=" + Date.now();
+return msg;</code></pre>
+    <h4>Post-process Script</h4>
+    <p>Executes <b>once</b> after the command finishes successfully (i.e., no spawn error occurred), allowing modification of the final control message before it is sent.</p>
+    <p>The script context contains:</p>
+    <ul>
+        <li><code>msg</code>: The final control message object. The control data itself is located at <code>msg[resultSource]</code> (where `resultSource` is the configured Result Property, defaulting to 'payload').</li>
+        <li><code>originalMsg</code>: The original message that triggered the node.</li>
+        <li><code>resultSource</code>: The configured property name where results are stored.</li>
+        <li>Standard Node-RED context objects (<code>node</code>, <code>context</code>, <code>flow</code>, <code>global</code>, <code>config</code>, etc.)</li>
+    </ul>
+    <p>The script should modify the <code>msg</code> object directly within the context. It does not need to return a value. If the script throws an error, the final stderr and control messages will <b>not</b> be sent.</p>
+    <pre><code>// Example: Add a custom property based on stdout content
+// Note: Access control data via msg[resultSource]
+let controlData = msg[resultSource]; 
+if (controlData.stdout.includes("SUCCESS")) {
+  controlData.processed_status = "OK";
+}
+
+// Example: Prevent sending the control message if RC was 0
+if (controlData.rc === 0) {
+  throw new Error("Command succeeded, suppressing control message.");
+}
+</code></pre>
+
+    <p>Refer to the `node-red-contrib-bigexec` documentation for details on the original core features like handling
+        streams, error codes, environment variables, etc.</p>
+    <p><b>Note:</b> This is a placeholder help text. Ensure ACE editors are properly configured in `oneditprepare`.</p>
+
+</script> 
