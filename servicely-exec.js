@@ -139,6 +139,10 @@ module.exports = function(RED) {
                     if (envVars && typeof envVars === 'object') {
                         for (const key in envVars) {
                             if (Object.hasOwnProperty.call(envVars, key)) {
+                                // --- Add logging here ---
+                                node.log(`Setting env var from msg.${node.envProperty}: ${key}=${String(envVars[key])}`);
+                                
+                                // --- End logging ---
                                 commandOptions.env[key] = String(envVars[key]);
                             }
                         }
@@ -284,6 +288,7 @@ module.exports = function(RED) {
                         state: spawnError ? 'error' : 'end',
                         rc: spawnError ? null : exitCode,
                         pid: pid,
+                        command: commandLog, // Add the executed command string here
                         stdout: stdoutResult, // Add complete stdout
                         stderr: stderrResult  // Add complete stderr
                     };
